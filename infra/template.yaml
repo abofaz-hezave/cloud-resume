@@ -1,0 +1,79 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Cloud Resume Challenge — API + Database
+
+# ──────────────────────────────────────────────
+# Global defaults applied to all functions
+# ──────────────────────────────────────────────
+Globals:
+  Function:
+    Timeout: 5
+    Runtime: python3.12
+    MemorySize: 128
+
+# ──────────────────────────────────────────────
+# Resources
+# ──────────────────────────────────────────────
+Resources:
+
+  # ---------- DynamoDB Table ----------
+  VisitorCountTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: cloud-resume-visitor-count
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  # ---------- Lambda Function ----------
+  VisitorCountFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: cloud-resume-visitor-count
+      CodeUri: ../backend/lambda_function/
+      Handler: app.lambda_handler
+      Architectures:
+        - arm64
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref VisitorCountTable
+      Policies:
+        - DynamoDBCrudPolicy:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref VisitorCountTable
+      Events:
+        GetCount:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref VisitorCountApi
+            Path: /count
+            Method: GET
+
+  # ---------- HTTP API (API Gateway v2) ----------
+  VisitorCountApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: prod
+      CorsConfiguration:
+        AllowOrigins:
+          - "https://your-domain.com"       # TODO: replace with your actual domain
+        AllowMethods:
+          - GET
+        AllowHeaders:
+          - Content-Type
+
+# ──────────────────────────────────────────────
+# Outputs — printed after deploy
+# ──────────────────────────────────────────────
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${VisitorCountApi}.execute-api.${AWS::Region}.amazonaws.com/prod/count"
